@@ -48,19 +48,11 @@ impl OptionStrike {
     pub fn call_put_difference(self) -> Cents {
         return self.call.mark() - self.put.mark();
     }
-
-    /**
-     * The midpoint of the call mark price and put mark price.
-     */
-    pub fn mark(self) -> Cents {
-        return (self.call.mark() + self.put.mark()) / 2;
-    }
 }
 
 #[derive(Clone, Debug)]
 pub struct OptionsByExpiryDate {
     expires_at: NaiveDateTime,
-    risk_free_rate: Percentage,
     calls: Vec<OptionContract>,
     puts: Vec<OptionContract>,
 }
@@ -146,8 +138,8 @@ impl OptionsByExpiryDate {
     /**
      * Computes the implied forward price.
      */
-    pub fn forward_price(&self, now: NaiveDateTime) -> Cents {
-        let interest = (self.risk_free_rate * self.time_to_expiration(now)).exp();
+    pub fn forward_price(&self, risk_free_rate: f64, now: NaiveDateTime) -> Cents {
+        let interest = (risk_free_rate * self.time_to_expiration(now)).exp();
         let mut strikes = self.get_strikes();
         // we want to find the ATM option
         strikes.sort_unstable_by_key(|k| k.call_put_difference().abs());
@@ -162,11 +154,11 @@ impl OptionsByExpiryDate {
     /**
      * \sigma^2 from the VIX whitepaper
      */
-    pub fn variance(&self, now: NaiveDateTime) -> Percentage {
+    pub fn variance(&self, risk_free_rate: f64, now: NaiveDateTime) -> Percentage {
         let t = self.time_to_expiration(now);
-        let risk_free_interest = (self.risk_free_rate * t).exp();
+        let risk_free_interest = (risk_free_rate * t).exp();
         let strikes = self.get_strikes();
-        let fp = self.forward_price(now);
+        let fp = self.forward_price(risk_free_rate, now);
 
         let (mut below_and_k, above): (Vec<OptionStrike>, Vec<OptionStrike>) =
             strikes.into_iter().partition(|x| (*x).price < fp);
@@ -217,7 +209,6 @@ pub fn group_options_by_expiry(
             expires_at,
             OptionsByExpiryDate {
                 expires_at: expires_at,
-                risk_free_rate: 0.003, // TODO(igm): make this configurable
                 calls: calls,
                 puts: puts,
             },
@@ -229,14 +220,16 @@ pub fn group_options_by_expiry(
 pub fn compute_vix(
     near_term: &OptionsByExpiryDate,
     next_term: &OptionsByExpiryDate,
+    near_term_risk_free_rate: f64,
+    next_term_risk_free_rate: f64,
     now: NaiveDateTime,
 ) -> Percentage {
     let t1 = near_term.time_to_expiration(now);
     let n_t1 = near_term.minutes_to_expiration(now);
-    let s1_sq = near_term.variance(now);
+    let s1_sq = near_term.variance(near_term_risk_free_rate, now);
     let t2 = next_term.time_to_expiration(now);
     let n_t2 = next_term.minutes_to_expiration(now);
-    let s2_sq = next_term.variance(now);
+    let s2_sq = next_term.variance(next_term_risk_free_rate, now);
     let n_30 = (30 * 24 * 60) as f64;
     let n_365 = (365 * 24 * 60) as f64;
 

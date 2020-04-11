@@ -1,7 +1,6 @@
 use chrono::prelude::*;
 use options_math::*;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 
@@ -65,13 +64,11 @@ fn test_vix() -> Result<(), Box<dyn Error>> {
             .and_then(|d| options_by_expiry.get(d)),
     ) {
         (Some(near_term), Some(next_term)) => {
-            let vix = compute_vix(near_term, next_term, now);
+            let vix = compute_vix(near_term, next_term, 0.0038, 0.0038, now);
             println!("{:?}", vix);
         }
         _ => {}
     }
 
-    // println!("{:?}", options_by_expiry);
-    // options_math::compute_vix();
     Ok(())
 }

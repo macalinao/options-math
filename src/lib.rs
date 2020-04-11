@@ -75,6 +75,8 @@ impl OptionsByExpiryDate {
             .clone()
             .into_iter()
             .chain(self.puts.clone().into_iter())
+            // filter out zero bids
+            .filter(|o| o.bid != 0)
             .collect();
         all_options.sort_unstable_by_key(|o| o.strike);
 
@@ -190,7 +192,8 @@ impl OptionsByExpiryDate {
         let contributions: f64 = selected_options
             .into_iter()
             .map(|(option, delta_k)| -> f64 {
-                return (delta_k as f64) / ((option.strike * option.strike) as f64)
+                let strike_dollars = option.strike as f64 / 100.0;
+                return (delta_k as f64 / 100.0) / (strike_dollars * strike_dollars)
                     * (option.mark() as f64 / 100.0)
                     * risk_free_interest;
             })

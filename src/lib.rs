@@ -70,13 +70,16 @@ impl OptionsByExpiryDate {
      * Gets options grouped and sorted by their strike price.
      */
     fn get_strikes(&self) -> Vec<OptionStrike> {
-        let all_options = self
+        let mut all_options: Vec<OptionContract> = self
             .calls
             .clone()
             .into_iter()
-            .chain(self.puts.clone().into_iter());
+            .chain(self.puts.clone().into_iter())
+            .collect();
+        all_options.sort_unstable_by_key(|o| o.strike);
 
         let mut options_by_strike: Vec<OptionStrike> = all_options
+            .into_iter()
             .group_by(|o| o.strike)
             .into_iter()
             .flat_map(|(strike, options)| -> Option<OptionStrike> {
@@ -158,7 +161,8 @@ impl OptionsByExpiryDate {
      * \sigma^2 from the VIX whitepaper
      */
     pub fn variance(&self, now: NaiveDateTime) -> Percentage {
-        let risk_free_interest = (self.risk_free_rate * self.time_to_expiration(now)).exp();
+        let t = self.time_to_expiration(now);
+        let risk_free_interest = (self.risk_free_rate * t).exp();
         let strikes = self.get_strikes();
         let fp = self.forward_price(now);
 
@@ -187,13 +191,13 @@ impl OptionsByExpiryDate {
             .into_iter()
             .map(|(option, delta_k)| -> f64 {
                 return (delta_k as f64) / ((option.strike * option.strike) as f64)
-                    * (option.mark() as f64)
-                    * (risk_free_interest as f64);
+                    * (option.mark() as f64 / 100.0)
+                    * risk_free_interest;
             })
             .sum();
 
         let a = fp as f64 / k_0 as f64 - 1.0;
-        return (2.0 * contributions - a * a) / self.time_to_expiration(now);
+        return (2.0 * contributions - a * a) / t;
     }
 }
 
@@ -232,6 +236,9 @@ pub fn compute_vix(
     let s2_sq = next_term.variance(now);
     let n_30 = (30 * 24 * 60) as f64;
     let n_365 = (365 * 24 * 60) as f64;
+
+    // println!("{:?}", &[s1_sq, s2_sq]);
+
     return ((t1 * s1_sq * (n_t2 - n_30) / (n_t2 - n_t1)
         + t2 * s2_sq * (n_30 - n_t1) / (n_t2 - n_t1))
         * n_365

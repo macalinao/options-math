@@ -21,7 +21,7 @@ fn test_vix() -> Result<(), Box<dyn Error>> {
     let f = File::open("./data/options.csv")?;
     let mut rdr = csv::Reader::from_reader(f);
 
-    let now = NaiveDateTime::from_timestamp(123456789, 0);
+    let now = NaiveDateTime::from_timestamp(1230768000, 0);
 
     let mut options: Vec<OptionContract> = vec![];
 
@@ -30,7 +30,10 @@ fn test_vix() -> Result<(), Box<dyn Error>> {
         // deserialization.
         let record: Record = result?;
 
-        let expiration = now + chrono::Duration::days(record.days.parse::<i64>()?);
+        let expiration = (now + chrono::Duration::days(record.days.parse::<i64>()?))
+            .with_hour(16)
+            .unwrap();
+
         options.push(OptionContract::new(
             expiration,
             (record.strike.parse::<f64>()? * 100.0) as Cents,

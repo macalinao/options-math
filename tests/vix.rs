@@ -33,14 +33,14 @@ fn test_vix() -> Result<(), Box<dyn Error>> {
         let expiration = now + chrono::Duration::days(record.days.parse::<i64>()?);
         options.push(OptionContract::new(
             expiration,
-            record.strike.parse()?,
+            (record.strike.parse::<f64>()? * 100.0) as Cents,
             OptionKind::Call,
             (record.call_bid.parse::<f64>()? * 100.0) as Cents,
             (record.call_ask.parse::<f64>()? * 100.0) as Cents,
         ));
         options.push(OptionContract::new(
             expiration,
-            record.strike.parse()?,
+            (record.strike.parse::<f64>()? * 100.0) as Cents,
             OptionKind::Put,
             (record.put_bid.parse::<f64>()? * 100.0) as Cents,
             (record.put_ask.parse::<f64>()? * 100.0) as Cents,

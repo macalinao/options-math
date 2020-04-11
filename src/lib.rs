@@ -29,7 +29,7 @@ impl OptionContract {
      * Mark price
      */
     pub fn mark(self) -> Cents {
-        return (self.ask - self.bid) / 2;
+        return (self.ask + self.bid) / 2;
     }
 }
 
@@ -236,8 +236,6 @@ pub fn compute_vix(
     let s2_sq = next_term.variance(now);
     let n_30 = (30 * 24 * 60) as f64;
     let n_365 = (365 * 24 * 60) as f64;
-
-    // println!("{:?}", &[s1_sq, s2_sq]);
 
     return ((t1 * s1_sq * (n_t2 - n_30) / (n_t2 - n_t1)
         + t2 * s2_sq * (n_30 - n_t1) / (n_t2 - n_t1))

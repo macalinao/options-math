@@ -1,8 +1,11 @@
+#[macro_use]
+extern crate derive_new;
+
 use chrono::prelude::*;
 use itertools::Itertools;
 use std::collections::HashMap;
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum OptionKind {
     Call,
     Put,
@@ -12,8 +15,9 @@ pub type Cents = i64;
 
 pub type Percentage = f64;
 
-#[derive(Clone, Copy)]
+#[derive(new, Clone, Copy, Debug)]
 pub struct OptionContract {
+    expires_at: NaiveDateTime,
     strike: Cents,
     kind: OptionKind,
     bid: Cents,
@@ -29,7 +33,7 @@ impl OptionContract {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct OptionStrike {
     price: Cents,
     put: OptionContract,
@@ -53,6 +57,7 @@ impl OptionStrike {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct OptionsByExpiryDate {
     expires_at: NaiveDateTime,
     risk_free_rate: Percentage,
@@ -70,12 +75,21 @@ impl OptionsByExpiryDate {
             .clone()
             .into_iter()
             .chain(self.puts.clone().into_iter());
+
         let mut options_by_strike: Vec<OptionStrike> = all_options
             .group_by(|o| o.strike)
             .into_iter()
-            .flat_map(|(strike, mut options)| -> Option<OptionStrike> {
-                let call = options.find(|o| o.kind == OptionKind::Call);
-                let put = options.find(|o| o.kind == OptionKind::Put);
+            .flat_map(|(strike, options)| -> Option<OptionStrike> {
+                let options_for_strike: Vec<OptionContract> = options.collect();
+                let call = options_for_strike
+                    .clone()
+                    .into_iter()
+                    .find(|o| o.kind == OptionKind::Call);
+                let put = options_for_strike
+                    .clone()
+                    .into_iter()
+                    .find(|o| o.kind == OptionKind::Put);
+
                 return match (call, put) {
                     (Some(c), Some(p)) => Some(OptionStrike {
                         price: strike,
@@ -147,13 +161,16 @@ impl OptionsByExpiryDate {
         let risk_free_interest = (self.risk_free_rate * self.time_to_expiration(now)).exp();
         let strikes = self.get_strikes();
         let fp = self.forward_price(now);
+
         let (mut below_and_k, above): (Vec<OptionStrike>, Vec<OptionStrike>) =
             strikes.into_iter().partition(|x| (*x).price < fp);
 
         // The highest below the forward price is K
         below_and_k.sort_unstable_by_key(|k| -k.price);
-        let (below, k) = below_and_k.split_at(1);
-        let k_0 = k.first().map(|s| s.price).unwrap_or(0);
+        let k = below_and_k.get(0);
+        let k_0 = k.map(|s| s.price).unwrap_or(0);
+
+        let below = below_and_k.get(1..).unwrap_or(&[]);
 
         // find all out of the money options + the atm option
         let selected_options = below
@@ -180,6 +197,28 @@ impl OptionsByExpiryDate {
     }
 }
 
+pub fn group_options_by_expiry(
+    options: &[OptionContract],
+) -> HashMap<NaiveDateTime, OptionsByExpiryDate> {
+    let mut options_by_expiry: HashMap<NaiveDateTime, OptionsByExpiryDate> = HashMap::new();
+
+    for (expires_at, options_for_expiry) in
+        options.into_iter().group_by(|o| o.expires_at).into_iter()
+    {
+        let (calls, puts) = options_for_expiry.partition(|o| o.kind == OptionKind::Call);
+        options_by_expiry.insert(
+            expires_at,
+            OptionsByExpiryDate {
+                expires_at: expires_at,
+                risk_free_rate: 0.003, // TODO(igm): make this configurable
+                calls: calls,
+                puts: puts,
+            },
+        );
+    }
+    return options_by_expiry;
+}
+
 pub fn compute_vix(
     near_term: &OptionsByExpiryDate,
     next_term: &OptionsByExpiryDate,
@@ -193,8 +232,10 @@ pub fn compute_vix(
     let s2_sq = next_term.variance(now);
     let n_30 = (30 * 24 * 60) as f64;
     let n_365 = (365 * 24 * 60) as f64;
-    return (t1 * s1_sq * (n_t2 - n_30) / (n_t2 - n_t1)
+    return ((t1 * s1_sq * (n_t2 - n_30) / (n_t2 - n_t1)
         + t2 * s2_sq * (n_30 - n_t1) / (n_t2 - n_t1))
+        * n_365
+        / n_30)
         .powf(0.5)
         * 100.0;
 }

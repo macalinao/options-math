@@ -1,4 +1,4 @@
-Expiration,Days,Strike,Call Bid,Call Ask,Put Bid,Put Ask
+expiration,days,strike,call_bid,call_ask,put_bid,put_ask
 20090110,9,200,717.6,722.8,0,0.05
 20090110,9,250,667.6,672.9,0,0.05
 20090110,9,300,617.9,622.9,0,0.05
